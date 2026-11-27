@@ -26,6 +26,7 @@ export function CartDrawer() {
   const [phone, setPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
   const [checkoutError, setCheckoutError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [receipt, setReceipt] = useState<OrderReceipt | null>(null);
 
   useEffect(() => {
@@ -50,8 +51,12 @@ export function CartDrawer() {
     setShowCheckout(true);
   };
 
-  const handleSubmitOrder = (e: React.FormEvent) => {
+  const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!session) {
+      setCheckoutError("Please sign in to save this order to your account.");
+      return;
+    }
     if (!customerName.trim() || !address.trim() || !phone.trim()) {
       setCheckoutError("Please fill in your name, delivery address, and phone number.");
       return;
@@ -61,16 +66,27 @@ export function CartDrawer() {
       return;
     }
     setCheckoutError("");
-    const confirmed = placeOrder({
-      customerName,
-      address,
-      phone,
-      paymentMethod,
-    });
-    setReceipt(confirmed);
-    setShowCheckout(false);
-    setAddress("");
-    setPhone("");
+    setIsSubmitting(true);
+    try {
+      const confirmed = await placeOrder({
+        customerName,
+        address,
+        phone,
+        paymentMethod,
+      });
+      setReceipt(confirmed);
+      setShowCheckout(false);
+      setAddress("");
+      setPhone("");
+    } catch (err) {
+      setCheckoutError(
+        err instanceof Error
+          ? err.message
+          : "Unable to place order right now. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -169,13 +185,22 @@ export function CartDrawer() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full py-2.5 px-4 rounded-lg bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-colors cursor-pointer"
-              >
-                Continue Shopping
-              </button>
+              <div className="flex flex-col gap-2.5">
+                <Link
+                  href="/orders"
+                  onClick={handleClose}
+                  className="w-full py-2.5 px-4 rounded-lg bg-orange-600 text-white text-sm font-semibold text-center hover:bg-orange-700 transition-colors"
+                >
+                  View Order History
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full py-2.5 px-4 rounded-lg bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-colors cursor-pointer"
+                >
+                  Continue Shopping
+                </button>
+              </div>
             </div>
           ) : cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center py-12 space-y-4">
@@ -198,6 +223,41 @@ export function CartDrawer() {
               >
                 Browse Shop Collection
               </Link>
+            </div>
+          ) : showCheckout && !session ? (
+            <div className="py-8 space-y-5 text-center">
+              <div className="space-y-2">
+                <h3 className="font-display text-lg font-semibold text-stone-900">
+                  Sign in to complete checkout
+                </h3>
+                <p className="text-sm text-stone-600 leading-relaxed">
+                  Please log in to link this order and your saved items to your
+                  ShopEase account history.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <Link
+                  href="/login"
+                  onClick={handleClose}
+                  className="w-full py-2.5 px-4 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors"
+                >
+                  Login to Account
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={handleClose}
+                  className="w-full py-2.5 px-4 rounded-lg border border-stone-300 text-sm font-medium text-stone-800 hover:bg-stone-100 transition-colors"
+                >
+                  Create Account
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowCheckout(false)}
+                  className="text-xs font-medium text-stone-500 hover:text-stone-900 underline pt-1 cursor-pointer"
+                >
+                  Back to Bag
+                </button>
+              </div>
             </div>
           ) : showCheckout ? (
             <form onSubmit={handleSubmitOrder} className="space-y-4">
@@ -309,10 +369,19 @@ export function CartDrawer() {
 
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full py-3 px-4 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 disabled:opacity-60 transition-colors cursor-pointer"
               >
-                Confirm Order &middot;{" "}
-                <span className="tabular-nums">{formatPrice(summary.total)}</span>
+                {isSubmitting ? (
+                  "Saving Order..."
+                ) : (
+                  <>
+                    Confirm Order &middot;{" "}
+                    <span className="tabular-nums">
+                      {formatPrice(summary.total)}
+                    </span>
+                  </>
+                )}
               </button>
             </form>
           ) : (

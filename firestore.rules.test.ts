@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 /**
- * Mirrors the exact hardened guards enforced by firestore.rules for /users/{userId}.
- * Verifies all 12 "Dirty Dozen" adversarial payloads are rejected.
+ * Mirrors the exact hardened guards enforced by firestore.rules for
+ * /users/{userId}, /users/{userId}/cartItems/{itemId}, and /users/{userId}/orders/{orderId}.
  */
 const ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 const SERVER_TIME = "SERVER_REQUEST_TIME";
@@ -27,27 +27,77 @@ function isValidUserProfile(
 
   if (!required.every((k) => k in data)) return false;
   if (!keys.every((k) => allowed.has(k))) return false;
-
   if (typeof data.uid !== "string" || !isValidId(data.uid) || data.uid !== auth.uid) {
     return false;
   }
-  if (
-    typeof data.fullName !== "string" ||
-    data.fullName.length < 1 ||
-    data.fullName.length > 120
-  ) {
+  if (typeof data.fullName !== "string" || data.fullName.length < 1 || data.fullName.length > 120) {
     return false;
   }
-  if (
-    typeof data.email !== "string" ||
-    data.email.length < 3 ||
-    data.email.length > 254
-  ) {
+  if (typeof data.email !== "string" || data.email.length < 3 || data.email.length > 254) {
     return false;
   }
   if ("photoURL" in data && (typeof data.photoURL !== "string" || data.photoURL.length > 500)) {
     return false;
   }
+  return true;
+}
+
+function isValidCartItem(data: Record<string, unknown>, auth: AuthContext): boolean {
+  const required = [
+    "uid",
+    "productId",
+    "slug",
+    "name",
+    "price",
+    "image",
+    "option",
+    "quantity",
+    "updatedAt",
+  ];
+  const allowed = new Set(required);
+  const keys = Object.keys(data);
+  if (!required.every((k) => k in data)) return false;
+  if (!keys.every((k) => allowed.has(k))) return false;
+  if (typeof data.uid !== "string" || !isValidId(data.uid) || data.uid !== auth.uid) {
+    return false;
+  }
+  if (typeof data.price !== "number" || data.price <= 0 || data.price > 100000) return false;
+  if (
+    typeof data.quantity !== "number" ||
+    !Number.isInteger(data.quantity) ||
+    data.quantity < 1 ||
+    data.quantity > 20
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isValidOrder(data: Record<string, unknown>, auth: AuthContext): boolean {
+  const required = [
+    "uid",
+    "orderNumber",
+    "customerName",
+    "address",
+    "phone",
+    "paymentMethod",
+    "items",
+    "subtotal",
+    "shippingFee",
+    "total",
+    "status",
+    "createdAtMs",
+    "createdAt",
+  ];
+  const allowed = new Set(required);
+  if (!required.every((k) => k in data)) return false;
+  if (!Object.keys(data).every((k) => allowed.has(k))) return false;
+  if (typeof data.uid !== "string" || !isValidId(data.uid) || data.uid !== auth.uid) {
+    return false;
+  }
+  if (!Array.isArray(data.items) || data.items.length < 1 || data.items.length > 50) return false;
+  if (data.status !== "Confirmed") return false;
+  if (data.paymentMethod !== "cod" && data.paymentMethod !== "card") return false;
   return true;
 }
 
@@ -87,7 +137,47 @@ function evaluateUserRule(params: {
   return "PERMISSION_DENIED";
 }
 
-test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
+function evaluateSubcollectionRule(params: {
+  collection: "cartItems" | "orders";
+  op: "get" | "list" | "create" | "update" | "delete";
+  auth: AuthContext | null;
+  targetUserId: string;
+  targetDocId?: string;
+  hasParentUser?: boolean;
+  incoming?: Record<string, unknown>;
+  existing?: Record<string, unknown>;
+}): "ALLOW" | "PERMISSION_DENIED" {
+  const {
+    collection,
+    op,
+    auth,
+    targetUserId,
+    targetDocId = "doc_1",
+    hasParentUser = true,
+    incoming,
+    existing,
+  } = params;
+  if (!auth || !auth.emailVerified) return "PERMISSION_DENIED";
+  if (!isValidId(targetUserId) || auth.uid !== targetUserId) return "PERMISSION_DENIED";
+  if (op === "list") {
+    return existing?.uid === auth.uid ? "ALLOW" : "PERMISSION_DENIED";
+  }
+  if (!isValidId(targetDocId)) return "PERMISSION_DENIED";
+
+  if (collection === "orders") {
+    if (op === "update" || op === "delete") return "PERMISSION_DENIED";
+    if (op === "get") return "ALLOW";
+    if (!hasParentUser || !incoming || !isValidOrder(incoming, auth)) return "PERMISSION_DENIED";
+    return incoming.createdAt === SERVER_TIME ? "ALLOW" : "PERMISSION_DENIED";
+  }
+
+  if (op === "get" || op === "delete") return "ALLOW";
+  if (!hasParentUser || !incoming || !isValidCartItem(incoming, auth)) return "PERMISSION_DENIED";
+  if (incoming.updatedAt !== SERVER_TIME) return "PERMISSION_DENIED";
+  return "ALLOW";
+}
+
+test("all dirty dozen + cart/order adversarial payloads return PERMISSION_DENIED", () => {
   const validAuth: AuthContext = { uid: "user_abc_123", emailVerified: true };
   const validProfile = {
     uid: "user_abc_123",
@@ -96,8 +186,33 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     createdAt: SERVER_TIME,
     updatedAt: SERVER_TIME,
   };
+  const validCartItem = {
+    uid: "user_abc_123",
+    productId: "product-1",
+    slug: "classic-sneakers",
+    name: "Classic Sneakers",
+    price: 59.99,
+    image: "/images/product_classic_sneakers.jpg",
+    option: "US 9",
+    quantity: 2,
+    updatedAt: SERVER_TIME,
+  };
+  const validOrder = {
+    uid: "user_abc_123",
+    orderNumber: "SE-1234",
+    customerName: "Alex Rivera",
+    address: "Davao City, Philippines",
+    phone: "09687368011",
+    paymentMethod: "cod",
+    items: [validCartItem],
+    subtotal: 119.98,
+    shippingFee: 0,
+    total: 119.98,
+    status: "Confirmed",
+    createdAtMs: 1730000000000,
+    createdAt: SERVER_TIME,
+  };
 
-  // Sanity check: legitimate owner create & update succeed
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -107,13 +222,32 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "ALLOW",
   );
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "cartItems",
+      op: "create",
+      auth: validAuth,
+      targetUserId: "user_abc_123",
+      incoming: validCartItem,
+    }),
+    "ALLOW",
+  );
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "orders",
+      op: "create",
+      auth: validAuth,
+      targetUserId: "user_abc_123",
+      incoming: validOrder,
+    }),
+    "ALLOW",
+  );
 
-  // 1. Unauthenticated read
+  // 1-12 UserProfile vectors
   assert.equal(
     evaluateUserRule({ op: "get", auth: null, targetUserId: "user_abc_123" }),
     "PERMISSION_DENIED",
   );
-  // 2. Cross-user PII read
   assert.equal(
     evaluateUserRule({
       op: "get",
@@ -122,12 +256,10 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 3. Blanket collection list
   assert.equal(
     evaluateUserRule({ op: "list", auth: validAuth, targetUserId: "user_abc_123" }),
     "PERMISSION_DENIED",
   );
-  // 4. Unverified email spoofing
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -137,7 +269,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 5. Identity spoofing inside body
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -147,7 +278,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 6. Shadow field / RBAC injection
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -157,7 +287,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 7. Path ID poisoning
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -167,7 +296,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 8. Oversized string DoW
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -177,7 +305,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 9. Value type poisoning
   assert.equal(
     evaluateUserRule({
       op: "update",
@@ -188,7 +315,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 10. Immutable createdAt tampering
   assert.equal(
     evaluateUserRule({
       op: "update",
@@ -199,7 +325,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 11. Client-forged timestamp on create
   assert.equal(
     evaluateUserRule({
       op: "create",
@@ -209,7 +334,6 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
     }),
     "PERMISSION_DENIED",
   );
-  // 12. Missing required field
   const { fullName: _omitted, ...missingName } = validProfile;
   void _omitted;
   assert.equal(
@@ -218,6 +342,49 @@ test("all 12 dirty dozen adversarial payloads return PERMISSION_DENIED", () => {
       auth: validAuth,
       targetUserId: "user_abc_123",
       incoming: missingName,
+    }),
+    "PERMISSION_DENIED",
+  );
+
+  // 13-16 CartItems & Orders cross-account isolation & integrity vectors
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "cartItems",
+      op: "create",
+      auth: { uid: "attacker_999", emailVerified: true },
+      targetUserId: "user_abc_123",
+      incoming: validCartItem,
+    }),
+    "PERMISSION_DENIED",
+  );
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "cartItems",
+      op: "create",
+      auth: validAuth,
+      targetUserId: "user_abc_123",
+      incoming: { ...validCartItem, quantity: 999 },
+    }),
+    "PERMISSION_DENIED",
+  );
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "orders",
+      op: "list",
+      auth: { uid: "attacker_999", emailVerified: true },
+      targetUserId: "user_abc_123",
+      existing: validOrder,
+    }),
+    "PERMISSION_DENIED",
+  );
+  assert.equal(
+    evaluateSubcollectionRule({
+      collection: "orders",
+      op: "update",
+      auth: validAuth,
+      targetUserId: "user_abc_123",
+      existing: validOrder,
+      incoming: validOrder,
     }),
     "PERMISSION_DENIED",
   );

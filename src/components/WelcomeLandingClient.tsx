@@ -7,14 +7,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  PackageCheck,
   ShoppingBag,
-  Truck,
   UserCheck,
 } from "lucide-react";
 import { formatPrice, PRODUCTS, TRENDING_PRODUCTS } from "@/lib/products";
 import { useShop } from "./ShopProvider";
 import { ProductImage } from "./ProductImage";
 import { ProductCard } from "./ProductCard";
+import { OrderHistorySection } from "./OrderHistorySection";
 
 const EASE_OUT_EXPO: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -42,8 +43,15 @@ const fadeUpItem = {
 };
 
 export function WelcomeLandingClient() {
-  const { session, authReady, summary, addToCart, openCart, logoutAccount } =
-    useShop();
+  const {
+    session,
+    authReady,
+    orders,
+    summary,
+    addToCart,
+    openCart,
+    logoutAccount,
+  } = useShop();
   const [spotlightIndex, setSpotlightIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [addedSlug, setAddedSlug] = useState<string | null>(null);
@@ -415,28 +423,29 @@ export function WelcomeLandingClient() {
               transition={{ duration: 0.18, ease: EASE_OUT_EXPO }}
               className="p-6 rounded-xl bg-stone-50 border border-stone-200 flex items-start gap-4"
             >
-              <Truck
+              <PackageCheck
                 className="w-5 h-5 text-orange-700 shrink-0 mt-0.5"
                 aria-hidden="true"
               />
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-                  Delivery Threshold
+                  Order History
                 </p>
-                <p className="mt-1 font-display text-base font-semibold text-stone-900">
-                  {summary.freeShippingRemaining === 0 && summary.itemCount > 0
-                    ? "Free shipping unlocked"
-                    : "Free shipping over $100.00"}
+                <p className="mt-1 font-display text-base font-semibold text-stone-900 tabular-nums">
+                  {orders.length} {orders.length === 1 ? "order" : "orders"} saved
                 </p>
-                <p className="mt-1 text-sm text-stone-600">
-                  {summary.itemCount > 0 && summary.freeShippingRemaining > 0
-                    ? `Add ${formatPrice(summary.freeShippingRemaining)} more to qualify.`
-                    : "Cash on delivery and card checkout supported."}
-                </p>
+                <a
+                  href="#member-order-history"
+                  className="mt-1.5 inline-block text-sm font-medium text-orange-700 hover:underline"
+                >
+                  View previous orders
+                </a>
               </div>
             </motion.div>
           </div>
         </section>
+
+        <OrderHistorySection compactHeading />
 
         {/* Trending & New Arrivals Grid */}
         <section id="member-new-arrivals" className="py-16 sm:py-20 bg-white">

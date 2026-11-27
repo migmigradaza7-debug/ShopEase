@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Authenticated shopper profile synced from Firebase Authentication.",
+      "description": "Authenticated shopper profile synchronized from Firebase Authentication.",
       "type": "object",
       "properties": {
         "uid": {
@@ -42,6 +42,162 @@
         }
       },
       "required": ["uid", "fullName", "email", "createdAt", "updatedAt"]
+    },
+    "CartItem": {
+      "title": "CartItem",
+      "description": "Persistent shopping bag line item scoped strictly to an authenticated shopper.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owning Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Catalog product identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "slug": {
+          "type": "string",
+          "description": "Catalog product URL slug.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "description": "Product display name.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit price in USD."
+        },
+        "image": {
+          "type": "string",
+          "description": "Product image path.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "option": {
+          "type": "string",
+          "description": "Selected variant option (size, finish, etc.).",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Item quantity between 1 and 20."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last cart update."
+        }
+      },
+      "required": [
+        "uid",
+        "productId",
+        "slug",
+        "name",
+        "price",
+        "image",
+        "option",
+        "quantity",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Completed checkout order persisted in the shopper's account history.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owning Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": {
+          "type": "string",
+          "description": "Human-readable order confirmation number.",
+          "minLength": 3,
+          "maxLength": 32
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Recipient full name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "address": {
+          "type": "string",
+          "description": "Delivery street address.",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number.",
+          "minLength": 5,
+          "maxLength": 40
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cod", "card"],
+          "description": "Selected payment method."
+        },
+        "items": {
+          "type": "array",
+          "description": "Bounded list of purchased line items (1 to 50 items)."
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Order subtotal before shipping."
+        },
+        "shippingFee": {
+          "type": "number",
+          "description": "Shipping fee applied."
+        },
+        "total": {
+          "type": "number",
+          "description": "Total order amount."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Confirmed"],
+          "description": "Initial confirmed order status."
+        },
+        "createdAtMs": {
+          "type": "number",
+          "description": "Client display timestamp in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server timestamp when the order was placed."
+        }
+      },
+      "required": [
+        "uid",
+        "orderNumber",
+        "customerName",
+        "address",
+        "phone",
+        "paymentMethod",
+        "items",
+        "subtotal",
+        "shippingFee",
+        "total",
+        "status",
+        "createdAtMs",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -50,6 +206,18 @@
         "$ref": "#/entities/UserProfile"
       },
       "description": "Private shopper profile documents accessible strictly by the owning authenticated user."
+    },
+    "/users/{userId}/cartItems/{itemId}": {
+      "schema": {
+        "$ref": "#/entities/CartItem"
+      },
+      "description": "Per-user persistent cart items synced across sessions and devices."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/Order"
+      },
+      "description": "Immutable per-user order history records linked strictly to the owning account."
     }
   }
 }

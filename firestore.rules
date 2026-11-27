@@ -32,6 +32,10 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function hasParentUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
     function isValidUserProfile(data) {
       return data.keys().hasAll(['uid', 'fullName', 'email', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['uid', 'fullName', 'email', 'photoURL', 'createdAt', 'updatedAt'])
@@ -42,6 +46,40 @@ service cloud.firestore {
         && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidCartItem(data) {
+      return data.keys().hasAll(['uid', 'productId', 'slug', 'name', 'price', 'image', 'option', 'quantity', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'productId', 'slug', 'name', 'price', 'image', 'option', 'quantity', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.productId is string && data.productId.size() >= 1 && data.productId.size() <= 64
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 140
+        && (data.price is int || data.price is float) && data.price > 0 && data.price <= 100000
+        && data.image is string && data.image.size() >= 1 && data.image.size() <= 300
+        && data.option is string && data.option.size() >= 1 && data.option.size() <= 80
+        && data.quantity is int && data.quantity >= 1 && data.quantity <= 20
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['uid', 'orderNumber', 'customerName', 'address', 'phone', 'paymentMethod', 'items', 'subtotal', 'shippingFee', 'total', 'status', 'createdAtMs', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'orderNumber', 'customerName', 'address', 'phone', 'paymentMethod', 'items', 'subtotal', 'shippingFee', 'total', 'status', 'createdAtMs', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 32
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120
+        && data.address is string && data.address.size() >= 1 && data.address.size() <= 400
+        && data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 40
+        && data.paymentMethod in ['cod', 'card']
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map
+        && (data.subtotal is int || data.subtotal is float) && data.subtotal >= 0
+        && (data.shippingFee is int || data.shippingFee is float) && data.shippingFee >= 0
+        && (data.total is int || data.total is float) && data.total >= 0
+        && data.status == 'Confirmed'
+        && data.createdAtMs is int && data.createdAtMs > 0
+        && data.createdAt is timestamp;
     }
 
     // Strictly isolated private shopper profile documents
@@ -64,6 +102,47 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'email', 'photoURL', 'updatedAt']);
 
       allow delete: if isValidId(userId) && isOwner(userId);
+
+      // Persistent per-user cart items
+      match /cartItems/{itemId} {
+        allow get: if isValidId(userId) && isValidId(itemId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && existing().uid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(itemId)
+          && isOwner(userId)
+          && isValidCartItem(incoming())
+          && incoming().updatedAt == request.time
+          && hasParentUser(userId);
+
+        allow update: if isValidId(userId)
+          && isValidId(itemId)
+          && isOwner(userId)
+          && isValidCartItem(incoming())
+          && incoming().uid == existing().uid
+          && incoming().productId == existing().productId
+          && incoming().option == existing().option
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['quantity', 'price', 'name', 'image', 'slug', 'updatedAt'])
+          && hasParentUser(userId);
+
+        allow delete: if isValidId(userId) && isValidId(itemId) && isOwner(userId);
+      }
+
+      // Immutable per-user order history
+      match /orders/{orderId} {
+        allow get: if isValidId(userId) && isValidId(orderId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && existing().uid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(orderId)
+          && isOwner(userId)
+          && isValidOrder(incoming())
+          && incoming().createdAt == request.time
+          && hasParentUser(userId);
+
+        allow update, delete: if false;
+      }
     }
   }
 }

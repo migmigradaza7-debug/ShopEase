@@ -5,18 +5,20 @@
 1. **Default-Deny Baseline**: Every Firestore path outside explicit allow blocks is denied (`allow read, write: if false;`).
 2. **Strict Ownership & PII Isolation (`/users/{userId}`)**:
    - `get`, `create`, `update`, and `delete` are permitted ONLY when `request.auth != null`, `request.auth.uid == userId`, and `request.auth.token.email_verified == true`.
-   - `list` is permanently denied (`allow list: if false;`) to prevent user directory enumeration and PII scraping.
-3. **Path Variable Hardening**: `{userId}` must satisfy `isValidId(userId)` (`id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$')`).
-4. **Validation Blueprint (`isValidUserProfile`)**:
-   - Required fields: `uid`, `fullName`, `email`, `createdAt`, `updatedAt`.
-   - Allowed fields: `uid`, `fullName`, `email`, `photoURL`, `createdAt`, `updatedAt` (no shadow fields such as `role` or `isAdmin`).
-   - `uid` must strictly equal `request.auth.uid`.
-   - String lengths bounded (`fullName` 1..120, `email` 3..254, `photoURL` <= 500).
+   - `list` is permanently denied (`allow list: if false;`) on `/users`.
+3. **Master Gate on Subcollections (`/users/{userId}/cartItems/{itemId}` & `/users/{userId}/orders/{orderId}`)**:
+   - Every subcollection write (`create`/`update`) verifies `exists(/databases/$(database)/documents/users/$(userId))`.
+   - `allow list` enforces `isOwner(userId) && resource.data.uid == request.auth.uid` with zero `get()`/`exists()` calls to avoid O(n) read amplification.
+4. **Validation Blueprints (`isValidUserProfile`, `isValidCartItem`, `isValidOrder`)**:
+   - Strict `hasAll` & `hasOnly` key allowlists prevent shadow field injection (`role`, `isAdmin`, etc.).
+   - `uid` in every document must strictly equal `request.auth.uid`.
+   - `CartItem.quantity` bounded `1..20`, `CartItem.price > 0`, bounded string sizes.
+   - `Order.items` is a strictly bounded array (`1..50` elements, `items[0] is map`), `Order.status == 'Confirmed'`, `paymentMethod in ['cod', 'card']`.
 5. **Temporal & Immutability Integrity**:
-   - `createdAt == request.time` and `updatedAt == request.time` on `create`.
-   - `uid == existing().uid` and `createdAt == existing().createdAt` (immutable), `updatedAt == request.time`, and `affectedKeys().hasOnly(['fullName', 'email', 'photoURL', 'updatedAt'])` on `update`.
+   - `createdAt == request.time` on `create`; `updatedAt == request.time` on `create`/`update`.
+   - `orders` are strictly immutable (`allow update, delete: if false;`).
 
-## 2. The "Dirty Dozen" Adversarial Payloads
+## 2. The "Dirty Dozen" + Subcollection Adversarial Payloads
 
 | # | Attack Vector | Target Operation | Expected Rule Outcome |
 |---|---|---|---|
@@ -32,3 +34,7 @@
 | 10 | Immutable field tampering (`createdAt` or `uid` mutated on update) | `UPDATE /users/uid_1` | `PERMISSION_DENIED` |
 | 11 | Client-forged timestamp (`createdAt != request.time`) | `CREATE /users/uid_1` | `PERMISSION_DENIED` |
 | 12 | Missing required field (`fullName` omitted on create) | `CREATE /users/uid_1` | `PERMISSION_DENIED` |
+| 13 | Cross-account cart item write (`auth.uid = uid_2`, target `/users/uid_1/cartItems/...`) | `CREATE /users/uid_1/cartItems/p1` | `PERMISSION_DENIED` |
+| 14 | Cart quantity overflow (`quantity: 999`) or negative price (`price: -5`) | `CREATE /users/uid_1/cartItems/p1` | `PERMISSION_DENIED` |
+| 15 | Cross-account order read or list (`auth.uid = uid_2`, target `/users/uid_1/orders`) | `LIST /users/uid_1/orders` | `PERMISSION_DENIED` |
+| 16 | Order tampering or deletion after checkout (`UPDATE` or `DELETE /users/uid_1/orders/ord_1`) | `UPDATE /users/uid_1/orders/ord_1` | `PERMISSION_DENIED` |

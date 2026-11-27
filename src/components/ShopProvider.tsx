@@ -15,6 +15,8 @@ import {
   CartItem,
   CartSummary,
   generateOrderNumber,
+  getScopedStorageKeys,
+  OrderRecord,
   removeCartItem,
   updateCartItemQuantity,
 } from "@/lib/cart";
@@ -22,10 +24,16 @@ import type { Product } from "@/lib/products";
 import { UserAccount, verifyCredentials } from "@/lib/auth";
 import {
   auth,
+  clearUserCartFirestore,
+  createUserOrderAndClearCart,
+  deleteUserCartItem,
   formatFirebaseAuthError,
   signInWithGooglePopup,
   signOutFirebase,
+  subscribeUserCart,
+  subscribeUserOrders,
   testConnection,
+  upsertUserCartItem,
 } from "@/lib/firebase";
 
 export interface SessionUser {
@@ -36,30 +44,22 @@ export interface SessionUser {
   provider?: "firebase" | "local";
 }
 
-export interface OrderReceipt {
-  orderNumber: string;
-  customerName: string;
-  address: string;
-  phone: string;
-  paymentMethod: "cod" | "card";
-  items: CartItem[];
-  total: number;
-  createdAt: string;
-}
+export type OrderReceipt = OrderRecord;
 
 interface StoreSnapshot {
   cart: CartItem[];
+  orders: OrderRecord[];
   users: UserAccount[];
   session: SessionUser | null;
 }
 
-const CART_KEY = "shopease_cart";
 const USERS_KEY = "shopease_users";
 const SESSION_KEY = "shopease_session";
 const STORE_EVENT = "shopease-store-updated";
 
 const EMPTY_SNAPSHOT: StoreSnapshot = {
   cart: [],
+  orders: [],
   users: [],
   session: null,
 };
@@ -92,25 +92,9 @@ function readUsersFromStorage(): UserAccount[] {
 
 function getStoreSnapshot(): StoreSnapshot {
   if (typeof window === "undefined") return EMPTY_SNAPSHOT;
-  const rawCart = localStorage.getItem(CART_KEY) || "[]";
-  const rawUsers = localStorage.getItem(USERS_KEY) || "[]";
-  const rawLegacyEmail = localStorage.getItem("userEmail") || "";
-  const rawLegacyPassword = localStorage.getItem("userPassword") || "";
+
   const rawSession = localStorage.getItem(SESSION_KEY) || "null";
-  const signature = `${rawCart}|${rawUsers}|${rawLegacyEmail}|${rawLegacyPassword}|${rawSession}`;
-
-  if (signature === cachedRawSignature) {
-    return cachedSnapshot;
-  }
-
-  let cart: CartItem[] = [];
   let session: SessionUser | null = null;
-  try {
-    const parsedCart = JSON.parse(rawCart);
-    if (Array.isArray(parsedCart)) cart = parsedCart;
-  } catch {
-    cart = [];
-  }
   try {
     const parsedSession = JSON.parse(rawSession);
     if (parsedSession && typeof parsedSession.email === "string") {
@@ -120,9 +104,37 @@ function getStoreSnapshot(): StoreSnapshot {
     session = null;
   }
 
+  const { cartKey, ordersKey } = getScopedStorageKeys(session?.email || null);
+  const rawCart = localStorage.getItem(cartKey) || "[]";
+  const rawOrders = ordersKey ? localStorage.getItem(ordersKey) || "[]" : "[]";
+  const rawUsers = localStorage.getItem(USERS_KEY) || "[]";
+  const rawLegacyEmail = localStorage.getItem("userEmail") || "";
+  const rawLegacyPassword = localStorage.getItem("userPassword") || "";
+
+  const signature = `${rawSession}|${cartKey}=${rawCart}|${ordersKey || "none"}=${rawOrders}|${rawUsers}|${rawLegacyEmail}|${rawLegacyPassword}`;
+  if (signature === cachedRawSignature) {
+    return cachedSnapshot;
+  }
+
+  let cart: CartItem[] = [];
+  let orders: OrderRecord[] = [];
+  try {
+    const parsedCart = JSON.parse(rawCart);
+    if (Array.isArray(parsedCart)) cart = parsedCart;
+  } catch {
+    cart = [];
+  }
+  try {
+    const parsedOrders = JSON.parse(rawOrders);
+    if (Array.isArray(parsedOrders)) orders = parsedOrders;
+  } catch {
+    orders = [];
+  }
+
   cachedRawSignature = signature;
   cachedSnapshot = {
     cart,
+    orders,
     users: readUsersFromStorage(),
     session,
   };
@@ -152,6 +164,7 @@ function emitStoreChange(): void {
 
 interface ShopContextValue {
   cart: CartItem[];
+  orders: OrderRecord[];
   summary: CartSummary;
   isCartOpen: boolean;
   openCart: () => void;
@@ -165,7 +178,7 @@ interface ShopContextValue {
     address: string;
     phone: string;
     paymentMethod: "cod" | "card";
-  }) => OrderReceipt;
+  }) => Promise<OrderRecord>;
   session: SessionUser | null;
   authReady: boolean;
   registerAccount: (account: UserAccount) => { ok: boolean; error?: string };
@@ -184,6 +197,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   );
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [firebaseSession, setFirebaseSession] = useState<SessionUser | null>(null);
+  const [firebaseCart, setFirebaseCart] = useState<CartItem[]>([]);
+  const [firebaseOrders, setFirebaseOrders] = useState<OrderRecord[]>([]);
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
@@ -202,76 +217,182 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         });
       } else {
         setFirebaseSession(null);
+        setFirebaseCart([]);
+        setFirebaseOrders([]);
       }
       setAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
+  // Subscribe to Firestore cart and orders exclusively for the signed-in Firebase user
+  useEffect(() => {
+    if (!authReady || !firebaseSession?.uid) return;
+    const uid = firebaseSession.uid;
+    const unsubCart = subscribeUserCart(uid, (items) => {
+      setFirebaseCart(items);
+    });
+    const unsubOrders = subscribeUserOrders(uid, (orders) => {
+      setFirebaseOrders(orders);
+    });
+    return () => {
+      unsubCart();
+      unsubOrders();
+    };
+  }, [authReady, firebaseSession?.uid]);
+
+  const firebaseUid = firebaseSession?.uid;
+
   const openCart = useCallback(() => setIsCartOpen(true), []);
   const closeCart = useCallback(() => setIsCartOpen(false), []);
 
   const addToCart = useCallback(
     (product: Product, option: string, quantity = 1) => {
-      const current = getStoreSnapshot().cart;
-      const next = addCartItem(current, product, option, quantity);
-      localStorage.setItem(CART_KEY, JSON.stringify(next));
+      if (firebaseUid) {
+        const nextList = addCartItem(firebaseCart, product, option, quantity);
+        setFirebaseCart(nextList);
+        const updatedItem = nextList.find(
+          (i) => i.productId === product.id && i.option === (option || product.options[0]),
+        );
+        if (updatedItem) {
+          void upsertUserCartItem(firebaseUid, updatedItem);
+        }
+        setIsCartOpen(true);
+        return;
+      }
+
+      const current = getStoreSnapshot();
+      const { cartKey } = getScopedStorageKeys(current.session?.email || null);
+      const next = addCartItem(current.cart, product, option, quantity);
+      localStorage.setItem(cartKey, JSON.stringify(next));
       emitStoreChange();
       setIsCartOpen(true);
     },
-    [],
+    [firebaseUid, firebaseCart],
   );
 
   const updateQuantity = useCallback(
     (productId: string, option: string, quantity: number) => {
-      const current = getStoreSnapshot().cart;
-      const next = updateCartItemQuantity(current, productId, option, quantity);
-      localStorage.setItem(CART_KEY, JSON.stringify(next));
+      if (firebaseUid) {
+        const nextList = updateCartItemQuantity(
+          firebaseCart,
+          productId,
+          option,
+          quantity,
+        );
+        setFirebaseCart(nextList);
+        if (quantity <= 0) {
+          void deleteUserCartItem(firebaseUid, productId, option);
+        } else {
+          const updatedItem = nextList.find(
+            (i) => i.productId === productId && i.option === option,
+          );
+          if (updatedItem) {
+            void upsertUserCartItem(firebaseUid, updatedItem);
+          }
+        }
+        return;
+      }
+
+      const current = getStoreSnapshot();
+      const { cartKey } = getScopedStorageKeys(current.session?.email || null);
+      const next = updateCartItemQuantity(current.cart, productId, option, quantity);
+      localStorage.setItem(cartKey, JSON.stringify(next));
       emitStoreChange();
     },
-    [],
+    [firebaseUid, firebaseCart],
   );
 
-  const removeFromCart = useCallback((productId: string, option: string) => {
-    const current = getStoreSnapshot().cart;
-    const next = removeCartItem(current, productId, option);
-    localStorage.setItem(CART_KEY, JSON.stringify(next));
-    emitStoreChange();
-  }, []);
+  const removeFromCart = useCallback(
+    (productId: string, option: string) => {
+      if (firebaseUid) {
+        setFirebaseCart((prev) => removeCartItem(prev, productId, option));
+        void deleteUserCartItem(firebaseUid, productId, option);
+        return;
+      }
+
+      const current = getStoreSnapshot();
+      const { cartKey } = getScopedStorageKeys(current.session?.email || null);
+      const next = removeCartItem(current.cart, productId, option);
+      localStorage.setItem(cartKey, JSON.stringify(next));
+      emitStoreChange();
+    },
+    [firebaseUid],
+  );
 
   const clearCart = useCallback(() => {
-    localStorage.setItem(CART_KEY, JSON.stringify([]));
+    if (firebaseUid) {
+      const itemsToRemove = [...firebaseCart];
+      setFirebaseCart([]);
+      void clearUserCartFirestore(firebaseUid, itemsToRemove);
+      return;
+    }
+
+    const current = getStoreSnapshot();
+    const { cartKey } = getScopedStorageKeys(current.session?.email || null);
+    localStorage.setItem(cartKey, JSON.stringify([]));
     emitStoreChange();
-  }, []);
+  }, [firebaseUid, firebaseCart]);
 
   const placeOrder = useCallback(
-    (details: {
+    async (details: {
       customerName: string;
       address: string;
       phone: string;
       paymentMethod: "cod" | "card";
-    }): OrderReceipt => {
-      const current = getStoreSnapshot().cart;
-      const orderSummary = calculateCartSummary(current);
-      const receipt: OrderReceipt = {
-        orderNumber: generateOrderNumber(),
+    }): Promise<OrderRecord> => {
+      const activeCart = firebaseUid
+        ? firebaseCart
+        : getStoreSnapshot().cart;
+      const orderSummary = calculateCartSummary(activeCart);
+      const nowMs = Date.now();
+      const orderRecord: OrderRecord = {
+        id: `order_${nowMs}_${Math.floor(Math.random() * 10000)}`,
+        orderNumber: generateOrderNumber(nowMs),
         customerName: details.customerName.trim(),
         address: details.address.trim(),
         phone: details.phone.trim(),
         paymentMethod: details.paymentMethod,
-        items: current,
+        items: activeCart,
+        subtotal: orderSummary.subtotal,
+        shippingFee: orderSummary.shippingFee,
         total: orderSummary.total,
-        createdAt: new Date().toLocaleDateString("en-US", {
+        status: "Confirmed",
+        createdAtMs: nowMs,
+        createdAt: new Date(nowMs).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
         }),
       };
-      localStorage.setItem(CART_KEY, JSON.stringify([]));
+
+      if (firebaseUid) {
+        await createUserOrderAndClearCart(
+          firebaseUid,
+          orderRecord,
+          activeCart,
+        );
+        setFirebaseCart([]);
+        setFirebaseOrders((prev) => [
+          orderRecord,
+          ...prev.filter((o) => o.id !== orderRecord.id),
+        ]);
+        return orderRecord;
+      }
+
+      const current = getStoreSnapshot();
+      const { cartKey, ordersKey } = getScopedStorageKeys(
+        current.session?.email || null,
+      );
+      if (ordersKey) {
+        const nextOrders = [orderRecord, ...current.orders];
+        localStorage.setItem(ordersKey, JSON.stringify(nextOrders));
+      }
+      localStorage.setItem(cartKey, JSON.stringify([]));
       emitStoreChange();
-      return receipt;
+      return orderRecord;
     },
-    [],
+    [firebaseUid, firebaseCart],
   );
 
   const registerAccount = useCallback((account: UserAccount) => {
@@ -344,22 +465,32 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(SESSION_KEY);
     emitStoreChange();
     setFirebaseSession(null);
+    setFirebaseCart([]);
+    setFirebaseOrders([]);
     void signOutFirebase().catch(() => {
-      // Ignore Firebase sign-out error if user was signed in via local fallback
+      // Ignore Firebase sign-out error if user was signed in locally
     });
   }, []);
 
-  const summary = calculateCartSummary(snapshot.cart);
   const activeSession: SessionUser | null =
     firebaseSession ??
     (snapshot.session
       ? { ...snapshot.session, provider: snapshot.session.provider ?? "local" }
       : null);
 
+  const activeCart = firebaseSession?.uid ? firebaseCart : snapshot.cart;
+  const activeOrders = firebaseSession?.uid
+    ? firebaseOrders
+    : activeSession
+      ? snapshot.orders
+      : [];
+  const summary = calculateCartSummary(activeCart);
+
   return (
     <ShopContext.Provider
       value={{
-        cart: snapshot.cart,
+        cart: activeCart,
+        orders: activeOrders,
         summary,
         isCartOpen,
         openCart,

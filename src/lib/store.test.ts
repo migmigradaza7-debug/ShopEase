@@ -4,6 +4,8 @@ import { PRODUCTS, filterProducts, formatPrice, getProductBySlug } from "./produ
 import {
   addCartItem,
   calculateCartSummary,
+  cartItemDocId,
+  getScopedStorageKeys,
   removeCartItem,
   updateCartItemQuantity,
 } from "./cart";
@@ -114,4 +116,18 @@ test("contact form validates name, email, and minimum message length", () => {
     }).valid,
     true,
   );
+});
+
+test("account scoping isolates cart and order storage keys per user", () => {
+  const guest = getScopedStorageKeys(null);
+  const alex = getScopedStorageKeys("Alex@Example.com");
+  const sam = getScopedStorageKeys("sam@example.com");
+
+  assert.equal(guest.cartKey, "shopease_cart_guest");
+  assert.equal(guest.ordersKey, null);
+  assert.notEqual(alex.cartKey, guest.cartKey);
+  assert.notEqual(alex.cartKey, sam.cartKey);
+  assert.notEqual(alex.ordersKey, sam.ordersKey);
+  assert.match(cartItemDocId("product-1", "US 9"), /^[a-zA-Z0-9_-]+$/);
+  assert.match(cartItemDocId("product-8", "Olive & Saddle"), /^[a-zA-Z0-9_-]+$/);
 });

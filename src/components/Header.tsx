@@ -56,14 +56,26 @@ export function Header() {
             </Link>
           ))}
           {session ? (
-            <button
-              type="button"
-              onClick={logoutAccount}
-              title={`Signed in as ${session.email}`}
-              className="whitespace-nowrap shrink-0 py-1 border-b-2 border-transparent text-stone-700 hover:text-orange-700 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 rounded-sm"
-            >
-              Sign Out ({session.fullName.split(" ")[0]})
-            </button>
+            <>
+              <Link
+                href="/orders"
+                className={`whitespace-nowrap shrink-0 py-1 border-b-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 rounded-sm ${
+                  pathname === "/orders" || pathname === "/welcome"
+                    ? "text-stone-900 border-orange-600"
+                    : "border-transparent hover:text-stone-900 hover:border-stone-300"
+                }`}
+              >
+                Orders
+              </Link>
+              <button
+                type="button"
+                onClick={logoutAccount}
+                title={`Signed in as ${session.email}`}
+                className="whitespace-nowrap shrink-0 py-1 border-b-2 border-transparent text-stone-700 hover:text-orange-700 transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 rounded-sm"
+              >
+                Sign Out ({session.fullName.split(" ")[0]})
+              </button>
+            </>
           ) : (
             <Link
               href="/login"
@@ -126,16 +138,25 @@ export function Header() {
             </Link>
           ))}
           {session ? (
-            <button
-              type="button"
-              onClick={() => {
-                logoutAccount();
-                setMobileMenuOpen(false);
-              }}
-              className="text-left px-3 py-2.5 rounded-lg text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-orange-700"
-            >
-              Sign Out ({session.fullName})
-            </button>
+            <>
+              <Link
+                href="/orders"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2.5 rounded-lg text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-900"
+              >
+                Orders
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  logoutAccount();
+                  setMobileMenuOpen(false);
+                }}
+                className="text-left px-3 py-2.5 rounded-lg text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-orange-700"
+              >
+                Sign Out ({session.fullName})
+              </button>
+            </>
           ) : (
             <Link
               href="/login"

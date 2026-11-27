@@ -18,6 +18,22 @@ export interface CartSummary {
   total: number;
 }
 
+export interface OrderRecord {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  address: string;
+  phone: string;
+  paymentMethod: "cod" | "card";
+  items: CartItem[];
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  status: "Confirmed";
+  createdAtMs: number;
+  createdAt: string;
+}
+
 export const FREE_SHIPPING_THRESHOLD = 100;
 export const STANDARD_SHIPPING_FEE = 8;
 
@@ -107,4 +123,27 @@ export function calculateCartSummary(items: CartItem[]): CartSummary {
 export function generateOrderNumber(seed = Date.now()): string {
   const suffix = Math.abs(seed % 9000) + 1000;
   return `SE-${suffix}`;
+}
+
+export function cartItemDocId(productId: string, option: string): string {
+  const cleanProduct = productId.replace(/[^a-zA-Z0-9_-]/g, "_") || "item";
+  const cleanOption = option.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "default";
+  return `${cleanProduct}__${cleanOption}`.slice(0, 120);
+}
+
+export function getScopedStorageKeys(accountEmail?: string | null): {
+  cartKey: string;
+  ordersKey: string | null;
+} {
+  const normalized = accountEmail?.trim().toLowerCase();
+  if (!normalized) {
+    return {
+      cartKey: "shopease_cart_guest",
+      ordersKey: null,
+    };
+  }
+  return {
+    cartKey: `shopease_cart_user_${normalized}`,
+    ordersKey: `shopease_orders_user_${normalized}`,
+  };
 }
