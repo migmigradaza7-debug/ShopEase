@@ -1,6 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
-import { PRODUCT_CATEGORIES, ProductCategory } from "@/lib/products";
+import { PRODUCT_FILTERS, ProductFilter } from "@/lib/products";
 import { ProductCatalog } from "@/components/ProductCatalog";
 
 export const metadata: Metadata = {
@@ -15,14 +15,14 @@ interface ShopPageProps {
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
   const { category } = await searchParams;
-  const matchedCategory = PRODUCT_CATEGORIES.find(
+  const matchedFilter = PRODUCT_FILTERS.find(
     (item) => item.toLowerCase() === category?.toLowerCase(),
-  ) as "All" | ProductCategory | undefined;
+  ) as ProductFilter | undefined;
 
   return (
     <ProductCatalog
-      key={matchedCategory || "All"}
-      initialCategory={matchedCategory || "All"}
+      key={matchedFilter || "All"}
+      initialCategory={matchedFilter || "All"}
     />
   );
 }

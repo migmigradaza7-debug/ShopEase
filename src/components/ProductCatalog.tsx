@@ -5,8 +5,8 @@ import { Search, X } from "lucide-react";
 import { motion, MotionConfig } from "motion/react";
 import {
   filterProducts,
-  PRODUCT_CATEGORIES,
-  ProductCategory,
+  PRODUCT_FILTERS,
+  ProductFilter,
   PRODUCTS,
 } from "@/lib/products";
 import { ProductCard } from "./ProductCard";
@@ -14,11 +14,11 @@ import { ProductCard } from "./ProductCard";
 const EASE_OUT_EXPO: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 interface ProductCatalogProps {
-  initialCategory?: "All" | ProductCategory;
+  initialCategory?: ProductFilter;
 }
 
 export function ProductCatalog({ initialCategory = "All" }: ProductCatalogProps) {
-  const [selectedCategory, setSelectedCategory] = useState<"All" | ProductCategory>(
+  const [selectedCategory, setSelectedCategory] = useState<ProductFilter>(
     initialCategory,
   );
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,10 +33,13 @@ export function ProductCatalog({ initialCategory = "All" }: ProductCatalogProps)
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
                 ShopEase Collection &middot;{" "}
+                <span className="tabular-nums">{visibleProducts.length}</span> of{" "}
                 <span className="tabular-nums">{PRODUCTS.length} Items</span>
               </p>
               <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold text-stone-900 tracking-tight">
-                Shop All Essentials
+                {selectedCategory === "Trending"
+                  ? "Trending Essentials"
+                  : "Shop All Essentials"}
               </h1>
               <p className="mt-2 text-sm sm:text-base text-stone-600 max-w-xl">
                 Browse curated footwear, wireless audio, wearables, and carry
@@ -51,7 +54,7 @@ export function ProductCatalog({ initialCategory = "All" }: ProductCatalogProps)
                 aria-label="Filter products by category"
                 className="inline-flex flex-wrap items-center gap-1 p-1 bg-stone-200/70 rounded-lg border border-stone-200 shrink-0"
               >
-                {PRODUCT_CATEGORIES.map((category) => {
+                {PRODUCT_FILTERS.map((category) => {
                   const active = selectedCategory === category;
                   return (
                     <button

@@ -14,16 +14,21 @@ import {
   verifyCredentials,
 } from "./auth";
 
-test("catalog preserves all products including new arrivals and filters cleanly", () => {
-  assert.equal(PRODUCTS.length, 8);
+test("catalog preserves all products including new arrivals and trending items", () => {
+  assert.equal(PRODUCTS.length, 12);
   assert.equal(getProductBySlug("classic-sneakers")?.price, 59.99);
   assert.equal(getProductBySlug("running-trainers")?.price, 94.0);
   assert.equal(getProductBySlug("canvas-weekender-duffel")?.category, "Carry");
-  assert.equal(filterProducts(PRODUCTS, "Audio").length, 2);
-  assert.equal(filterProducts(PRODUCTS, "Footwear").length, 2);
-  assert.equal(filterProducts(PRODUCTS, "Wearables").length, 2);
-  assert.equal(filterProducts(PRODUCTS, "Carry").length, 2);
+  assert.equal(getProductBySlug("suede-chelsea-boots")?.price, 142.0);
+  assert.equal(getProductBySlug("crossbody-sling-bag")?.category, "Carry");
+  assert.equal(filterProducts(PRODUCTS, "Trending").length, 4);
+  assert.equal(filterProducts(PRODUCTS, "Audio").length, 3);
+  assert.equal(filterProducts(PRODUCTS, "Footwear").length, 3);
+  assert.equal(filterProducts(PRODUCTS, "Wearables").length, 3);
+  assert.equal(filterProducts(PRODUCTS, "Carry").length, 3);
   assert.equal(filterProducts(PRODUCTS, "All", "leather").length, 3);
+  assert.equal(filterProducts(PRODUCTS, "All", "suede").length, 1);
+  assert.equal(filterProducts(PRODUCTS, "All", "trending").length, 4);
   assert.equal(formatPrice(120), "$120.00");
 });
 

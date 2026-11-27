@@ -11,14 +11,15 @@ import {
   Truck,
   UserCheck,
 } from "lucide-react";
-import { formatPrice, PRODUCTS } from "@/lib/products";
+import { formatPrice, PRODUCTS, TRENDING_PRODUCTS } from "@/lib/products";
 import { useShop } from "./ShopProvider";
 import { ProductImage } from "./ProductImage";
 import { ProductCard } from "./ProductCard";
 
 const EASE_OUT_EXPO: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
-const NEW_ARRIVALS = PRODUCTS.slice(4);
+const SPOTLIGHT_PRODUCTS = TRENDING_PRODUCTS;
+const RECENT_RELEASES = PRODUCTS.slice(4);
 
 const staggerContainer = {
   hidden: { opacity: 0.95 },
@@ -46,13 +47,13 @@ export function WelcomeLandingClient() {
   const [direction, setDirection] = useState(1);
   const [addedSlug, setAddedSlug] = useState<string | null>(null);
 
-  const spotlightProduct = NEW_ARRIVALS[spotlightIndex] || PRODUCTS[0];
+  const spotlightProduct = SPOTLIGHT_PRODUCTS[spotlightIndex] || PRODUCTS[0];
 
   useEffect(() => {
     if (!session) return;
     const timer = window.setInterval(() => {
       setDirection(1);
-      setSpotlightIndex((prev) => (prev + 1) % NEW_ARRIVALS.length);
+      setSpotlightIndex((prev) => (prev + 1) % SPOTLIGHT_PRODUCTS.length);
     }, 5500);
     return () => window.clearInterval(timer);
   }, [session]);
@@ -60,7 +61,8 @@ export function WelcomeLandingClient() {
   const handleStepSpotlight = (delta: number) => {
     setDirection(delta);
     setSpotlightIndex(
-      (prev) => (prev + delta + NEW_ARRIVALS.length) % NEW_ARRIVALS.length,
+      (prev) =>
+        (prev + delta + SPOTLIGHT_PRODUCTS.length) % SPOTLIGHT_PRODUCTS.length,
     );
   };
 
@@ -149,9 +151,9 @@ export function WelcomeLandingClient() {
                 variants={fadeUpItem}
                 className="text-base sm:text-lg text-stone-600 max-w-lg leading-relaxed"
               >
-                Four new essentials have just landed in our collection. Explore
-                the latest footwear, compact audio, analog timekeeping, and
-                waxed canvas carry curated for everyday wear.
+                Eight fresh and trending essentials have joined our collection.
+                Explore suede Chelsea boots, portable 360-degree audio,
+                polarized eyewear, and everyday carry crafted for daily wear.
               </motion.p>
 
               <motion.div
@@ -162,7 +164,7 @@ export function WelcomeLandingClient() {
                   href="#member-new-arrivals"
                   className="inline-flex items-center gap-2 px-6 py-3 min-h-[44px] rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors whitespace-nowrap shrink-0"
                 >
-                  <span>Explore New Arrivals</span>
+                  <span>Explore Trending</span>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 </a>
 
@@ -193,9 +195,9 @@ export function WelcomeLandingClient() {
               <div className="h-full rounded-2xl bg-white border border-stone-200 p-5 sm:p-6 flex flex-col justify-between gap-5">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                    Arrival Spotlight &middot;{" "}
+                    Trending Spotlight &middot;{" "}
                     <span className="tabular-nums text-stone-900">
-                      0{spotlightIndex + 1} / 0{NEW_ARRIVALS.length}
+                      0{spotlightIndex + 1} / 0{SPOTLIGHT_PRODUCTS.length}
                     </span>
                   </p>
                   <div className="flex items-center gap-1.5">
@@ -297,19 +299,19 @@ export function WelcomeLandingClient() {
                 {/* Spotlight item selector tabs */}
                 <div
                   role="tablist"
-                  aria-label="Spotlight new arrivals"
+                  aria-label="Spotlight trending products"
                   className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-stone-100"
                 >
-                  {NEW_ARRIVALS.map((item, idx) => {
+                  {SPOTLIGHT_PRODUCTS.map((item, idx) => {
                     const active = idx === spotlightIndex;
                     const shortLabel =
-                      item.slug === "running-trainers"
-                        ? "Trainers"
-                        : item.slug === "wireless-earbuds"
-                          ? "Earbuds"
-                          : item.slug === "minimalist-analog-watch"
-                            ? "Analog Watch"
-                            : "Weekender";
+                      item.slug === "suede-chelsea-boots"
+                        ? "Chelsea Boots"
+                        : item.slug === "portable-bluetooth-speaker"
+                          ? "Speaker"
+                          : item.slug === "polarized-acetate-sunglasses"
+                            ? "Sunglasses"
+                            : "Sling Bag";
                     return (
                       <button
                         key={item.id}
@@ -413,30 +415,39 @@ export function WelcomeLandingClient() {
           </div>
         </section>
 
-        {/* New Arrivals Grid */}
+        {/* Trending & New Arrivals Grid */}
         <section id="member-new-arrivals" className="py-16 sm:py-20 bg-white">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-                  Just Added
+                  Trending &amp; Just Added
                 </p>
                 <h2 className="mt-1.5 font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
-                  Latest Releases for You
+                  Trending &amp; Latest Releases
                 </h2>
               </div>
 
-              <Link
-                href="/shop"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700 hover:text-orange-800 transition-colors"
-              >
-                <span>View all {PRODUCTS.length} products</span>
-                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </Link>
+              <div className="flex items-center gap-5 shrink-0">
+                <Link
+                  href="/shop?category=Trending"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-800 hover:text-orange-700 transition-colors whitespace-nowrap"
+                >
+                  <span>Trending Only</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </Link>
+                <Link
+                  href="/shop"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700 hover:text-orange-800 transition-colors whitespace-nowrap"
+                >
+                  <span>View all {PRODUCTS.length} products</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {NEW_ARRIVALS.map((product) => (
+              {RECENT_RELEASES.map((product) => (
                 <div key={product.id}>
                   <ProductCard product={product} />
                 </div>

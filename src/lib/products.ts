@@ -1,4 +1,5 @@
 export type ProductCategory = "Footwear" | "Audio" | "Wearables" | "Carry";
+export type ProductFilter = "All" | "Trending" | ProductCategory;
 
 export interface Product {
   id: string;
@@ -10,6 +11,7 @@ export interface Product {
   description: string;
   image: string;
   availability: string;
+  trending?: boolean;
   optionLabel: string;
   options: string[];
   specs: { label: string; value: string }[];
@@ -168,6 +170,86 @@ export const PRODUCTS: Product[] = [
       { label: "Trim", value: "Full-grain bridle leather handles" },
     ],
   },
+  {
+    id: "product-9",
+    slug: "suede-chelsea-boots",
+    name: "Suede Chelsea Boots",
+    category: "Footwear",
+    price: 142.0,
+    shortDescription: "Water-resistant taupe suede boots with cushioned crepe soles.",
+    description:
+      "Refined pull-on Chelsea silhouette crafted in soft water-repellent Italian suede with elastic side gussets and shock-absorbing natural crepe rubber outsoles for crisp all-season wear.",
+    image: "/images/product_chelsea_boots.jpg",
+    availability: "Trending",
+    trending: true,
+    optionLabel: "Size",
+    options: ["US 8", "US 9", "US 10", "US 11"],
+    specs: [
+      { label: "Upper", value: "Water-repellent split suede" },
+      { label: "Outsole", value: "Textured natural rubber crepe" },
+      { label: "Lining", value: "Breathable calfskin footbed" },
+    ],
+  },
+  {
+    id: "product-10",
+    slug: "portable-bluetooth-speaker",
+    name: "Portable Bluetooth Speaker",
+    category: "Audio",
+    price: 78.0,
+    shortDescription: "360-degree acoustic sound in an anodized aluminum cylinder.",
+    description:
+      "Room-filling 360-degree audio tuned for clear mids and deep bass without distortion. Wrapped in woven acoustic fabric with tactile rotary volume control and 18-hour battery life.",
+    image: "/images/product_bluetooth_speaker.jpg",
+    availability: "Trending",
+    trending: true,
+    optionLabel: "Finish",
+    options: ["Stone Gray", "Sage Green"],
+    specs: [
+      { label: "Output", value: "20W 360-degree full-range driver" },
+      { label: "Battery", value: "Up to 18 hours · USB-C fast charge" },
+      { label: "Protection", value: "IP67 dust & water resistant" },
+    ],
+  },
+  {
+    id: "product-11",
+    slug: "polarized-acetate-sunglasses",
+    name: "Polarized Acetate Sunglasses",
+    category: "Wearables",
+    price: 84.0,
+    shortDescription: "Hand-finished cellulose acetate frames with UV400 lenses.",
+    description:
+      "Balanced everyday eyewear sculpted from plant-based tortoiseshell acetate with riveted five-barrel hinges and anti-glare polarized nylon lenses offering 100% UVA/UVB protection.",
+    image: "/images/product_acetate_sunglasses_pair.jpg",
+    availability: "Trending",
+    trending: true,
+    optionLabel: "Frame",
+    options: ["Tortoiseshell", "Matte Black"],
+    specs: [
+      { label: "Frame", value: "Hand-polished Italian acetate" },
+      { label: "Lenses", value: "Polarized CR-39 · 100% UV400" },
+      { label: "Includes", value: "Collapsible leather travel case" },
+    ],
+  },
+  {
+    id: "product-12",
+    slug: "crossbody-sling-bag",
+    name: "Crossbody Sling Bag",
+    category: "Carry",
+    price: 64.0,
+    shortDescription: "Weatherproof ballistic nylon sling for compact daily carry.",
+    description:
+      "Streamlined hands-free organizer designed for city errands and travel days. Built from abrasion-resistant ballistic nylon with leather pull tabs, magnetic strap buckle, and padded tablet sleeve.",
+    image: "/images/product_crossbody_sling.jpg",
+    availability: "Trending",
+    trending: true,
+    optionLabel: "Colorway",
+    options: ["Charcoal Nylon", "Sandstone"],
+    specs: [
+      { label: "Capacity", value: "4.5L · Fits 11\" tablet & essentials" },
+      { label: "Shell", value: "1680D weatherproof ballistic nylon" },
+      { label: "Strap", value: "Quick-release magnetic stabilizer" },
+    ],
+  },
 ];
 
 export const PRODUCT_CATEGORIES: ("All" | ProductCategory)[] = [
@@ -178,23 +260,42 @@ export const PRODUCT_CATEGORIES: ("All" | ProductCategory)[] = [
   "Carry",
 ];
 
+export const PRODUCT_FILTERS: ProductFilter[] = [
+  "All",
+  "Trending",
+  "Footwear",
+  "Audio",
+  "Wearables",
+  "Carry",
+];
+
+export const TRENDING_PRODUCTS: Product[] = PRODUCTS.filter(
+  (product) => product.trending || product.availability === "Trending",
+);
+
 export function getProductBySlug(slug: string): Product | undefined {
   return PRODUCTS.find((product) => product.slug === slug);
 }
 
 export function filterProducts(
   products: Product[],
-  category: "All" | ProductCategory,
+  filter: ProductFilter,
   searchQuery = "",
 ): Product[] {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   return products.filter((product) => {
-    const matchesCategory = category === "All" || product.category === category;
-    if (!matchesCategory) return false;
+    const matchesFilter =
+      filter === "All"
+        ? true
+        : filter === "Trending"
+          ? Boolean(product.trending || product.availability === "Trending")
+          : product.category === filter;
+    if (!matchesFilter) return false;
     if (!normalizedQuery) return true;
     return (
       product.name.toLowerCase().includes(normalizedQuery) ||
       product.category.toLowerCase().includes(normalizedQuery) ||
+      product.availability.toLowerCase().includes(normalizedQuery) ||
       product.shortDescription.toLowerCase().includes(normalizedQuery)
     );
   });

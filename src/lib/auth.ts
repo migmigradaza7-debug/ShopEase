@@ -91,3 +91,25 @@ export function validateContactInput(input: {
   }
   return { valid: true };
 }
+
+export const AUTH_COOKIE_NAME = "shopease_auth";
+
+export function isPublicAuthPath(pathname: string): boolean {
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/signup" ||
+    pathname.startsWith("/signup/")
+  );
+}
+
+export function resolveAuthRedirect(input: {
+  pathname: string;
+  isAuthenticated: boolean;
+}): string | null {
+  if (!input.isAuthenticated && !isPublicAuthPath(input.pathname)) {
+    return "/login";
+  }
+  return null;
+}
+

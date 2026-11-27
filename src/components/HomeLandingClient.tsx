@@ -111,13 +111,22 @@ export function HomeLandingClient() {
               </h2>
             </div>
 
-            <Link
-              href="/shop"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700 hover:text-orange-800 transition-colors whitespace-nowrap shrink-0"
-            >
-              <span>Browse All Products</span>
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </Link>
+            <div className="flex flex-wrap items-center gap-5 shrink-0">
+              <Link
+                href="/shop?category=Trending"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-800 hover:text-orange-700 transition-colors whitespace-nowrap shrink-0"
+              >
+                <span>Trending Now</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </Link>
+              <Link
+                href="/shop"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700 hover:text-orange-800 transition-colors whitespace-nowrap shrink-0"
+              >
+                <span>Browse All Products</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </Link>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
