@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ShopProvider } from "@/components/ShopProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
@@ -43,12 +44,14 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${dmSans.variable}`}
     >
       <body className="min-h-screen flex flex-col bg-stone-50 text-stone-900">
-        <ShopProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-          <CartDrawer />
-        </ShopProvider>
+        <ErrorBoundary>
+          <ShopProvider>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+            <CartDrawer />
+          </ShopProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

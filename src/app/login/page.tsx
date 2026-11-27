@@ -3,19 +3,33 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useShop } from "@/components/ShopProvider";
 import { validateLoginInput } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginAccount, session, logoutAccount } = useShop();
+  const { loginAccount, loginWithGoogle, session, logoutAccount } = useShop();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setIsGoogleLoading(true);
+    const result = await loginWithGoogle();
+    setIsGoogleLoading(false);
+    if (!result.ok) {
+      setError(result.error || "Unable to sign in with Google.");
+      return;
+    }
+    setIsRedirecting(true);
+    router.push("/welcome");
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +89,7 @@ export default function LoginPage() {
               Login to Your Account
             </h1>
             <p className="text-sm text-stone-600">
-              Sign in with your ShopEase credentials.
+              Sign in with Google or your ShopEase credentials.
             </p>
           </div>
 
@@ -87,6 +101,28 @@ export default function LoginPage() {
               {error}
             </p>
           )}
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading}
+            className="w-full py-3 px-4 min-h-[44px] rounded-lg border border-stone-300 bg-white text-stone-900 text-sm font-semibold hover:bg-stone-100 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2.5 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4 text-orange-700" aria-hidden="true" />
+            <span>
+              {isGoogleLoading
+                ? "Signing in with Google..."
+                : "Continue with Google"}
+            </span>
+          </button>
+
+          <div className="relative flex items-center py-1">
+            <div className="flex-grow border-t border-stone-200" />
+            <span className="px-3 text-xs uppercase tracking-wider text-stone-400">
+              or with email
+            </span>
+            <div className="flex-grow border-t border-stone-200" />
+          </div>
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div>

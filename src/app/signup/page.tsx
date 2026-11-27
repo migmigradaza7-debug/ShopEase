@@ -3,18 +3,32 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LogIn } from "lucide-react";
 import { useShop } from "@/components/ShopProvider";
 import { validateSignupInput } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { registerAccount } = useShop();
+  const { registerAccount, loginWithGoogle } = useShop();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const handleGoogleSignup = async () => {
+    setError("");
+    setIsGoogleLoading(true);
+    const result = await loginWithGoogle();
+    setIsGoogleLoading(false);
+    if (!result.ok) {
+      setError(result.error || "Unable to sign in with Google.");
+      return;
+    }
+    router.push("/welcome");
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +62,7 @@ export default function SignupPage() {
               Create an Account
             </h1>
             <p className="text-sm text-stone-600">
-              Join ShopEase to save your preferences and checkout faster.
+              Continue with Google or register a ShopEase account.
             </p>
           </div>
 
@@ -60,6 +74,28 @@ export default function SignupPage() {
               {error}
             </p>
           )}
+
+          <button
+            type="button"
+            onClick={handleGoogleSignup}
+            disabled={isGoogleLoading}
+            className="w-full py-3 px-4 min-h-[44px] rounded-lg border border-stone-300 bg-white text-stone-900 text-sm font-semibold hover:bg-stone-100 disabled:opacity-60 transition-colors inline-flex items-center justify-center gap-2.5 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4 text-orange-700" aria-hidden="true" />
+            <span>
+              {isGoogleLoading
+                ? "Connecting Google account..."
+                : "Continue with Google"}
+            </span>
+          </button>
+
+          <div className="relative flex items-center py-1">
+            <div className="flex-grow border-t border-stone-200" />
+            <span className="px-3 text-xs uppercase tracking-wider text-stone-400">
+              or register with email
+            </span>
+            <div className="flex-grow border-t border-stone-200" />
+          </div>
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div>

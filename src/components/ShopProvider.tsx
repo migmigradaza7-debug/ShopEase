@@ -1,6 +1,14 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useState, useSyncExternalStore } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   addCartItem,
   calculateCartSummary,
@@ -12,10 +20,20 @@ import {
 } from "@/lib/cart";
 import type { Product } from "@/lib/products";
 import { UserAccount, verifyCredentials } from "@/lib/auth";
+import {
+  auth,
+  formatFirebaseAuthError,
+  signInWithGooglePopup,
+  signOutFirebase,
+  testConnection,
+} from "@/lib/firebase";
 
 export interface SessionUser {
+  uid?: string;
   fullName: string;
   email: string;
+  photoURL?: string;
+  provider?: "firebase" | "local";
 }
 
 export interface OrderReceipt {
@@ -149,8 +167,10 @@ interface ShopContextValue {
     paymentMethod: "cod" | "card";
   }) => OrderReceipt;
   session: SessionUser | null;
+  authReady: boolean;
   registerAccount: (account: UserAccount) => { ok: boolean; error?: string };
   loginAccount: (email: string, password: string) => { ok: boolean; error?: string };
+  loginWithGoogle: () => Promise<{ ok: boolean; error?: string }>;
   logoutAccount: () => void;
 }
 
@@ -163,6 +183,30 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     getServerSnapshot,
   );
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [firebaseSession, setFirebaseSession] = useState<SessionUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    void testConnection();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email) {
+        setFirebaseSession({
+          uid: user.uid,
+          fullName:
+            user.displayName ||
+            user.email.split("@")[0] ||
+            "ShopEase Member",
+          email: user.email,
+          photoURL: user.photoURL || undefined,
+          provider: "firebase",
+        });
+      } else {
+        setFirebaseSession(null);
+      }
+      setAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const openCart = useCallback(() => setIsCartOpen(true), []);
   const closeCart = useCallback(() => setIsCartOpen(false), []);
@@ -270,18 +314,47 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     const nextSession: SessionUser = {
       fullName: matched.fullName,
       email: matched.email,
+      provider: "local",
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
     emitStoreChange();
     return { ok: true };
   }, []);
 
+  const loginWithGoogle = useCallback(async () => {
+    try {
+      const user = await signInWithGooglePopup();
+      setFirebaseSession({
+        uid: user.uid,
+        fullName:
+          user.displayName ||
+          user.email?.split("@")[0] ||
+          "ShopEase Member",
+        email: user.email || "",
+        photoURL: user.photoURL || undefined,
+        provider: "firebase",
+      });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: formatFirebaseAuthError(error) };
+    }
+  }, []);
+
   const logoutAccount = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
     emitStoreChange();
+    setFirebaseSession(null);
+    void signOutFirebase().catch(() => {
+      // Ignore Firebase sign-out error if user was signed in via local fallback
+    });
   }, []);
 
   const summary = calculateCartSummary(snapshot.cart);
+  const activeSession: SessionUser | null =
+    firebaseSession ??
+    (snapshot.session
+      ? { ...snapshot.session, provider: snapshot.session.provider ?? "local" }
+      : null);
 
   return (
     <ShopContext.Provider
@@ -296,9 +369,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         removeFromCart,
         clearCart,
         placeOrder,
-        session: snapshot.session,
+        session: activeSession,
+        authReady,
         registerAccount,
         loginAccount,
+        loginWithGoogle,
         logoutAccount,
       }}
     >

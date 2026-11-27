@@ -42,7 +42,8 @@ const fadeUpItem = {
 };
 
 export function WelcomeLandingClient() {
-  const { session, summary, addToCart, openCart, logoutAccount } = useShop();
+  const { session, authReady, summary, addToCart, openCart, logoutAccount } =
+    useShop();
   const [spotlightIndex, setSpotlightIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [addedSlug, setAddedSlug] = useState<string | null>(null);
@@ -76,6 +77,26 @@ export function WelcomeLandingClient() {
     setAddedSlug(spotlightProduct.slug);
     window.setTimeout(() => setAddedSlug(null), 1600);
   };
+
+  if (!session && !authReady) {
+    return (
+      <section className="py-16 sm:py-24 bg-stone-50">
+        <div className="max-w-md mx-auto px-4">
+          <div className="p-8 rounded-2xl bg-white border border-stone-200 text-center space-y-3">
+            <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+              Member Access
+            </p>
+            <h1 className="font-display text-xl font-bold text-stone-900">
+              Checking your session...
+            </h1>
+            <p className="text-sm text-stone-600">
+              Syncing your ShopEase account details.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (!session) {
     return (
@@ -350,7 +371,9 @@ export function WelcomeLandingClient() {
               />
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-                  Signed In Account
+                  {session.provider === "firebase"
+                    ? "Firebase Google Auth"
+                    : "Signed In Account"}
                 </p>
                 <p className="mt-1 font-display text-base font-semibold text-stone-900">
                   {session.fullName}
